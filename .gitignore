@@ -1,27 +1,30 @@
-# Die Website ist ein eigenes Repo und gehoert nicht in dieses hier.
-owlanzi-website/
+# Build output and editor state
+.pio/
+.vscode/
 
-# Bauergebnisse und Editorkram
-ulanzi-firmware/.pio/
-ulanzi-firmware/.vscode/
-
-# Aeltere Fassungen, die beim Entwickeln zur Seite gelegt wurden
-ulanzi-firmware/backup/
+# Older copies kept aside while developing
+backup/
 *.bak
 
-# NIEMALS VEROEFFENTLICHEN.
-# Diese Datei enthaelt WLAN- und Owlet-Zugangsdaten im Klartext, und ihre
-# Zeichenketten landen beim Uebersetzen MIT IM ABBILD. Wer eine so gebaute
-# .bin weitergibt, verteilt seine Passwoerter. Siehe src/main.cpp und
-# tools/make-installer.ps1 - die veroeffentlichte .bin baut die Umgebung
-# "release" ausdruecklich ohne diese Datei.
-ulanzi-firmware/src/secrets_local.h
+# NEVER PUBLISH THIS.
+# It holds Wi-Fi and Owlet credentials in plain text, and its string literals
+# end up INSIDE THE COMPILED IMAGE. Anyone handing out a .bin built with this
+# file present is handing out their passwords. See src/main.cpp and
+# tools/make-installer.ps1 - the published image is built by the "release"
+# environment, which excludes this file on purpose.
+src/secrets_local.h
 
-# Zwischenergebnisse: abgerufene Seiten, Protokolle, Bildschirmfotos.
-# Bildschirmfotos der Oberflaeche koennen die eigene E-Mail-Adresse zeigen.
-ulanzi-firmware/tools/scratch/
+# Working files: fetched pages, logs, screenshots. A screenshot of the web
+# interface can show your own email address.
+tools/scratch/
 *.log
+served.html
+served.js
+served-setup.html
+bootlog.txt
+*.png
+!assets/**/*.png
 
-# Betriebssystemkram
+# OS clutter
 Thumbs.db
 .DS_Store

@@ -1,0 +1,81 @@
+<!doctype html><html lang=en><meta charset=utf-8>
+<meta name=viewport content="width=device-width,initial-scale=1">
+<title>install owlanzi</title>
+<script type=module src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+<style>
+:root{color-scheme:dark;--bg:#0c0e12;--card:#151920;--line:#232a35;--fg:#e8ebf0;
+ --mut:#8d97a6;--acc:#3b82f6;--warn:#fbbf24}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);
+ font:16px/1.6 system-ui,-apple-system,sans-serif}
+.w{max-width:620px;margin:0 auto;padding:34px 18px 60px}
+img.logo{height:46px;width:auto;display:block;margin-bottom:10px}
+@media(max-width:430px){img.logo{height:34px}}
+.sub{color:var(--mut);margin:0 0 26px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:13px;
+ padding:18px 20px;margin:16px 0}
+h2{font-size:13px;margin:0 0 12px;color:var(--mut);text-transform:uppercase;
+ letter-spacing:.07em}
+ol{margin:0;padding-left:20px} li{margin:9px 0}
+.warn{background:#2a1e10;border:1px solid #4a3616;color:#e8c98a;
+ border-radius:10px;padding:14px;font-size:14.5px}
+.note{color:var(--mut);font-size:14px}
+a{color:var(--acc)}
+esp-web-install-button{--esp-tools-button-color:#fff;
+ --esp-tools-button-text-color:#fff}
+.btnrow{margin:18px 0 4px}
+.unsupported,.not-allowed{color:var(--warn);font-size:14.5px}
+</style>
+<div class=w>
+ <h1><img class=logo src="owlanzi.svg" alt="owlanzi"></h1>
+ <p class=sub>The Owlet Smart Sock on a Ulanzi TC001. Installed straight from
+  the browser &ndash; nothing to download, nothing to set up.</p>
+
+ <div class=warn><b>Before you start.</b> This device is an
+  <b>additional display</b>. It complements the Owlet base station, it does
+  not replace it. Wi-Fi can drop, the Owlet cloud can have trouble, this
+  firmware can have bugs. Keep relying on the base station.</div>
+
+ <div class=card><h2>How it works</h2>
+  <ol>
+   <li>Connect the clock to your computer over USB-C. <b>Chrome, Edge or
+       Opera</b> &ndash; Firefox and Safari cannot do Web Serial.</li>
+   <li>Unplug the clock, <b>hold the middle button</b> and plug it back in
+       while holding. That is flash mode.</li>
+   <li>Hit <b>Install</b> below, pick the serial port, wait. It takes about
+       a minute.</li>
+   <li>Afterwards the clock opens the open Wi-Fi hotspot <b>owlanzi</b>.
+       Join it from your phone &ndash; the setup page opens by itself.
+       Otherwise browse to <a href="http://192.168.4.1">192.168.4.1</a>.</li>
+   <li>Enter your own Wi-Fi and your Owlet account, save. The clock restarts
+       and is then reachable on your home network.</li>
+  </ol>
+  <div class=btnrow>
+   <esp-web-install-button manifest="manifest.json">
+    <button slot=activate style="padding:12px 22px;background:var(--acc);color:#fff;
+      border:0;border-radius:9px;font-size:16px;font-weight:600;cursor:pointer">
+      Install owlanzi</button>
+    <span slot=unsupported class=unsupported>This browser cannot do Web Serial.
+      Use Chrome, Edge or Opera on a computer.</span>
+    <span slot=not-allowed class=not-allowed>This only works over https or
+      localhost.</span>
+   </esp-web-install-button>
+  </div>
+  <p class=note>The first install erases the whole flash &ndash; an existing
+   AWTRIX installation and its settings are gone with it.</p>
+ </div>
+
+ <div class=card><h2>Going back to AWTRIX</h2>
+  <p class=note>The same way: put the clock into flash mode and open the
+   <a href="https://awtrix.github.io/AWTRIX3/docs/ulanzi_flasher/">AWTRIX web flasher</a>.
+   The USB route is the reliable one &ndash; an update from inside the owlanzi
+   interface swaps only the program, not the partition table, and AWTRIX
+   needs that table in its own shape.</p>
+ </div>
+
+ <div class=card><h2>What you need</h2>
+  <p class=note>A Ulanzi TC001, a USB-C cable with data lines (charge-only
+   cables will not do), an Owlet account and its credentials. The credentials
+   stay on the device and go nowhere else.</p>
+ </div>
+</div>

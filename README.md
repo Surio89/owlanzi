@@ -1,144 +1,121 @@
 # owlanzi
 
-Eigene Firmware für die **Ulanzi TC001**, die den Owlet Smart Sock direkt aus
-der Owlet-Cloud abfragt und Puls, Sauerstoffsättigung, Schlafzustand und
-Akkustand auf der 8×32-Matrix anzeigt. Kein Home Assistant, kein Broker, kein
-Server dazwischen — die Uhr holt sich die Werte selbst und wird über eine
-Weboberfläche im eigenen WLAN eingerichtet.
-
-> **Die Uhr ersetzt die Basisstation nicht.** Sie ist eine zusätzliche
-> Anzeige, weiter nichts. Sie ist kein Medizinprodukt, sie ist nicht geprüft,
-> und sie kann ausfallen — WLAN weg, Cloud weg, Firmware mit Fehler. Die
-> Alarme der Basisstation bleiben die, auf die du dich verlässt.
-
-<details>
-<summary><b>In English</b></summary>
-
-Custom firmware for the Ulanzi TC001 pixel clock. It polls the Owlet Smart
+Custom firmware for the **Ulanzi TC001** pixel clock. It polls the Owlet Smart
 Sock cloud directly and shows heart rate, oxygen saturation, sleep state and
-sock battery on the 8×32 matrix — no Home Assistant, no broker, no bridge.
-Setup runs through a web interface on your own network; the UI speaks English
-and German.
+sock battery on the 8×32 matrix. No Home Assistant, no broker, no bridge — the
+clock fetches the values itself and is configured through a web interface on
+your own network.
 
-**This is an additional display, not a replacement for the Owlet base
-station.** It is not a medical device and it is not certified. Keep relying on
-the base station's alarms.
+> **This clock does not replace the base station.** It is an additional
+> display, nothing more. It is not a medical device, it is not certified, and
+> it can fail — Wi-Fi drops, the cloud goes down, firmware has bugs. The base
+> station's alarms remain the ones you rely on.
 
-Source comments and this README are in German; the web interface is
-bilingual.
-</details>
+## What you need
 
----
+- a **Ulanzi TC001** (ESP32-WROOM-32D, 8 MB flash)
+- an **Owlet account** with a paired Smart Sock
+- a 2.4 GHz Wi-Fi network
+- a USB-C cable for the first flash
 
-## Was du brauchst
+## Flashing
 
-- eine **Ulanzi TC001** (ESP32-WROOM-32D, 8 MB Flash)
-- ein **Owlet-Konto** mit einem angelernten Smart Sock
-- ein 2,4-GHz-WLAN
-- ein USB-C-Kabel zum ersten Aufspielen
-
-## Aufspielen
-
-Im Ordner `ulanzi-firmware/web-installer/` liegt eine fertige Seite für
+`web-installer/` contains a ready-made page for
 [ESP Web Tools](https://esphome.github.io/esp-web-tools/): `index.html`,
-`manifest.json` und das zusammengesetzte Abbild. Über einen Browser mit
-Web-Serial (Chrome, Edge) lässt sich die Uhr damit ohne Toolchain flashen.
+`manifest.json` and the merged image. Any browser with Web Serial (Chrome,
+Edge) can flash the clock from it — no toolchain required.
 
-Selbst bauen geht mit [PlatformIO](https://platformio.org/):
+To build it yourself, use [PlatformIO](https://platformio.org/):
 
 ```
 pio run -e ulanzi -t upload
 ```
 
-**Zurück zu AWTRIX** führt nicht über ein Update: das ersetzt nur das
-Programm, nicht die Partitionstabelle. Dafür den AWTRIX-Web-Flasher über USB
-benutzen.
+**Going back to AWTRIX** is not done through an update: an update replaces
+only the program, not the partition table. Use the AWTRIX web flasher over
+USB instead.
 
-## Einrichten
+## Setting it up
 
-Beim ersten Start öffnet die Uhr einen offenen Hotspot **owlanzi**. Verbindest
-du dich damit, geht die Einrichtungsseite von selbst auf (sonst
-`192.168.4.1`). Zwei Angaben genügen: WLAN und Owlet-Konto. Danach startet die
-Uhr neu und zeigt 15 Sekunden lang ihre IP-Adresse — unter der erreichst du
-die vollständige Oberfläche.
+On first boot the clock opens an open hotspot called **owlanzi**. Join it and
+the setup page opens by itself (otherwise browse to `192.168.4.1`). Two
+things are needed: your Wi-Fi and your Owlet account. The clock then restarts
+and shows its IP address for 15 seconds — that address serves the full
+interface.
 
-Dort lassen sich unter anderem einstellen:
+There you can set, among other things:
 
-- **Farben** für jeden Schirm, mit einer Vorschau, die sich beim Verstellen
-  sofort mitfärbt
-- **Helligkeit**, getrennt für Normalbetrieb, Tageslicht, Alarm und Vorschau,
-  gesteuert über den Lichtsensor
-- **eigene Alarme** auf Sauerstoff und Puls, jeweils mit Grenzwert und
-  Mindestdauer
-- **Abrufabstand** zur Owlet-Cloud (5, 10 oder 15 Sekunden)
-- **Sprache** der Oberfläche und der Texte auf der Matrix
+- **colours** for every screen, with a preview that recolours as you drag the
+  picker
+- **brightness**, separately for normal use, daylight, alarm and preview,
+  driven by the light sensor
+- **your own alarms** on oxygen and heart rate, each with a threshold and a
+  minimum duration
+- **poll interval** against the Owlet cloud (5, 10 or 15 seconds)
+- **language** of the interface and of the text on the matrix (English or
+  German)
 
-Die Zugangsdaten bleiben auf dem Gerät. Die Verbindung zur Owlet-Cloud prüft
-Zertifikate.
+Credentials stay on the device. The connection to the Owlet cloud verifies
+certificates.
 
-## Wie die Anmeldung funktioniert
+## How the login works
 
-Die Owlet-Cloud hängt an Ayla Networks; die Anmeldung ist eine Kette aus vier
-Schritten:
+The Owlet cloud sits on Ayla Networks; signing in is a chain of four steps:
 
-1. Firebase: E-Mail + Passwort → `idToken`
-2. Owlet-SSO: `idToken` → `mini_token`
-3. Ayla: `mini_token` + App-Secret → `access_token`
-4. Ayla: `APP_ACTIVE=1` setzen, dann `properties.json` lesen
+1. Firebase: email + password → `idToken`
+2. Owlet SSO: `idToken` → `mini_token`
+3. Ayla: `mini_token` + app secret → `access_token`
+4. Ayla: set `APP_ACTIVE=1`, then read `properties.json`
 
-Schritt 4 ist nicht optional: ohne `APP_ACTIVE` liefert die Cloud
-eingefrorene Werte, sie aktualisiert nur, solange eine App zuhört.
+Step 4 is not optional. Without `APP_ACTIVE` the cloud serves frozen values —
+it only refreshes them while an app is listening.
 
-Endpunkte und Feldnamen stammen aus den quelloffenen Python-Implementierungen
-[pyowletapi](https://github.com/ryanbdclark/pyowletapi) und
+Endpoints and field names were taken from the open-source Python
+implementations [pyowletapi](https://github.com/ryanbdclark/pyowletapi) and
 [owlet_monitor](https://github.com/mbevand/owlet_monitor).
 
-## Aufbau
+## Layout
 
 ```
-ulanzi-firmware/
-  src/            Firmware (main, Anzeige, Owlet-Anbindung, Weboberfläche)
-  tools/          PowerShell-Werkzeuge: bauen, aufspielen, prüfen, ablichten
-  web-installer/  fertiges Abbild plus ESP-Web-Tools-Seite
-  assets/         Logo und Vorschaubild
-  experiments/    der erste Versuch: nur Anmeldung und Abruf, ohne Anzeige
+src/            firmware: main loop, display, Owlet client, web interface
+tools/          PowerShell helpers: build, upload, verify, screenshot
+web-installer/  merged image plus the ESP Web Tools page
+assets/         logo and preview image
 ```
 
-Drei PlatformIO-Umgebungen:
+Three PlatformIO environments:
 
-| Umgebung   | wofür                                                        |
-|------------|--------------------------------------------------------------|
-| `esp32dev` | nacktes Entwicklerboard, 4 MB, ohne Matrix                    |
-| `ulanzi`   | die TC001 selbst, 8 MB, mit OTA-Partitionen                   |
-| `release`  | wie `ulanzi`, aber ohne die lokale `secrets_local.h`          |
+| Environment | Purpose                                                   |
+|-------------|-----------------------------------------------------------|
+| `esp32dev`  | bare dev board, 4 MB, no matrix attached                   |
+| `ulanzi`    | the TC001 itself, 8 MB, with OTA partitions                |
+| `release`   | same as `ulanzi` but without the local `secrets_local.h`   |
 
-### Zugangsdaten beim Entwickeln
+### Credentials while developing
 
-`src/secrets_local.h` (Vorlage: `secrets_local.h.example`) befüllt den NVS
-einmalig, damit man beim Testen nicht jedes Mal durch den Hotspot muss. Die
-Datei steht in `.gitignore` — **ihre Zeichenketten landen aber beim
-Übersetzen im Abbild.** Eine so gebaute `.bin` darf nicht weitergegeben
-werden.
+`src/secrets_local.h` (template: `secrets_local.h.example`) seeds the NVS once
+so you don't have to walk through the setup hotspot on every test. The file is
+in `.gitignore` — **but its string literals end up inside the compiled
+image.** A `.bin` built with it present must not be handed to anyone.
 
-Deshalb: was veröffentlicht wird, baut `tools/make-installer.ps1` aus der
-Umgebung `release` und durchsucht das fertige Abbild anschließend noch einmal
-nach den Zeichenketten. Findet es etwas, löscht es die Datei und bricht ab.
+That is why anything published is built by `tools/make-installer.ps1` from the
+`release` environment, and why that script scans the finished image for those
+strings afterwards. If it finds one, it deletes the image and aborts.
 
-## Was noch offen ist
+## Still open
 
-Ehrlicher Stand, keine Wunschliste:
+An honest status, not a wishlist:
 
-- **Schlafzustand.** Die Zahlenwerte des Felds `ss` sind nicht dokumentiert.
-  Bekannt zugeordnet sind wach, leichter und tiefer Schlaf; alles andere
-  fällt bewusst auf den grauen Balken, statt eine Tiefe vorzutäuschen.
-- **Lichtschwelle.** Der Vorgabewert stammt aus AWTRIX und ist auf der TC001
-  noch nicht nachgemessen.
-- **Frischeprüfung.** Dass die Anzeige wirklich auf „warten" umschaltet, wenn
-  die Socke von der Ladeschale kommt, ist noch nicht mit einer echten Socke
-  durchgespielt.
+- **Sleep state.** The numeric values of the `ss` field are undocumented.
+  Awake, light sleep and deep sleep are mapped; everything else deliberately
+  falls back to a grey bar rather than faking a sleep depth.
+- **Light threshold.** The default came from AWTRIX and has not been measured
+  on the TC001 yet.
+- **Freshness gate.** That the display really switches to "waiting" when the
+  sock comes off the charger has not been walked through with a real sock.
 
-## Rechtliches
+## Legal
 
-Owlet und Ulanzi sind Marken der jeweiligen Eigentümer. Dieses Projekt steht
-in keiner Verbindung zu beiden. Es benutzt eine nicht öffentlich
-dokumentierte Schnittstelle, die sich jederzeit ändern kann.
+Owlet and Ulanzi are trademarks of their respective owners. This project is
+not affiliated with either. It talks to an interface that is not publicly
+documented and can change at any time.
