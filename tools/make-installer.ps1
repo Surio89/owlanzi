@@ -43,9 +43,26 @@ $part = Join-Path $build 'partitions.bin'
 $app  = Join-Path $build 'firmware.bin'
 $ota  = Join-Path $env:USERPROFILE '.platformio\packages\framework-arduinoespressif32\tools\partitions\boot_app0.bin'
 
+# merge_bin can rewrite the bootloader header but cannot fix an 8-MB app or
+# partition table. Reject stale builds, including when -SkipBuild is used.
+foreach ($image in @($boot, $app)) {
+  $header = [System.IO.File]::ReadAllBytes($image)
+  if ($header.Length -lt 24 -or $header[0] -ne 0xE9 -or $header[2] -ne 2 -or $header[3] -ne 0x20) {
+    throw 'TC001 requires freshly compiled 4-MB DIO/40-MHz bootloader AND application images. Rebuild release.'
+  }
+}
+$partitionBytes = [System.IO.File]::ReadAllBytes($part)
+for ($at = 0; $at + 32 -le $partitionBytes.Length; $at += 32) {
+  if ($partitionBytes[$at] -eq 0xEB -and $partitionBytes[$at + 1] -eq 0xEB) { break }
+  if ($partitionBytes[$at] -ne 0xAA -or $partitionBytes[$at + 1] -ne 0x50) { throw 'Invalid partition table.' }
+  $offset = [BitConverter]::ToUInt32($partitionBytes, $at + 4)
+  $size = [BitConverter]::ToUInt32($partitionBytes, $at + 8)
+  if ([long]$offset + [long]$size -gt 4MB) { throw 'Partition exceeds the TC001 4-MB flash.' }
+}
+
 $ErrorActionPreference = 'Continue'
 & $py $esptool --chip esp32 merge_bin -o $out `
-   --flash_mode dio --flash_freq 40m --flash_size 8MB `
+   --flash_mode dio --flash_freq 40m --flash_size 4MB `
    0x1000 $boot 0x8000 $part 0xe000 $ota 0x10000 $app
 $code = $LASTEXITCODE
 $ErrorActionPreference = 'Stop'

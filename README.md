@@ -13,7 +13,7 @@ your own network.
 
 ## What you need
 
-- a **Ulanzi TC001** (ESP32-WROOM-32D, 8 MB flash)
+- a **Ulanzi TC001** (ESP32-WROOM-32D, 4 MB flash)
 - an **Owlet account** with a paired Smart Sock
 - a 2.4 GHz Wi-Fi network
 - a USB-C cable for the first flash
@@ -88,7 +88,7 @@ Three PlatformIO environments:
 | Environment | Purpose                                                   |
 |-------------|-----------------------------------------------------------|
 | `esp32dev`  | bare dev board, 4 MB, no matrix attached                   |
-| `ulanzi`    | the TC001 itself, 8 MB, with OTA partitions                |
+| `ulanzi`    | the TC001 itself, 4 MB, with OTA partitions                |
 | `release`   | same as `ulanzi` but without the local `secrets_local.h`   |
 
 ### Credentials while developing
@@ -113,6 +113,25 @@ An honest status, not a wishlist:
   on the TC001 yet.
 - **Freshness gate.** That the display really switches to "waiting" when the
   sock comes off the charger has not been walked through with a real sock.
+
+## Licence
+
+[PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/)
+— see `LICENSE.md`.
+
+In plain words: build it, change it, pass it on, publish your changes. Just
+not for commercial purposes, and keep the notice — say where it came from.
+Private use, research, teaching, hobby projects, charities, schools and
+public bodies are all explicitly fine. Selling it, or building a product or a
+service on it, is not.
+
+Note that this makes the project source-available rather than open source in
+the OSI sense: every OSI-approved licence permits commercial use, and this one
+deliberately does not.
+
+The licence covers the code in this repository. The Owlet endpoints, field
+names and app constants are facts about someone else's service, read off the
+open-source projects credited above — they are not mine to license.
 
 ## Legal
 

@@ -46,7 +46,7 @@ bool cfgLoad() {
   G("ldrT", ldrThreshold); G("ldrH", ldrHysteresis);
   G("vol", volAlarm);    GB("snd", soundEnabled);
   G("arep", alarmRepeatSec);
-  GB("serp", serpentine);G("poll", pollSeconds);
+  G("poll", pollSeconds);
   GS("lang", lang);
   // The palette is stored as one block. If the size does not match (older
   // firmware, a new colour added since), the defaults simply stay.
@@ -70,7 +70,7 @@ void cfgSave() {
   P("ldrT", ldrThreshold); P("ldrH", ldrHysteresis);
   P("vol", volAlarm);    PB("snd", soundEnabled);
   P("arep", alarmRepeatSec);
-  PB("serp", serpentine);P("poll", pollSeconds);
+  P("poll", pollSeconds);
   PS("lang", lang);
   prefs.putBytes("pal", &gCfg.pal, sizeof(Palette));
   prefs.end();

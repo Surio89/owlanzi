@@ -25,25 +25,45 @@
 #define NUM_LEDS        (MATRIX_W * MATRIX_H)
 
 // --- Colour palette --------------------------------------------------------
-// Fully editable from the web interface, stored as one block in the NVS.
+/*
+ * Fully editable from the web interface, stored as one block in the NVS.
+ *
+ * These are the values from the Home Assistant original (script
+ * awtrix_owlet_update), taken across unchanged. They are deliberately muted
+ * so the picture still reads as dark below the lowest brightness step: the
+ * brightness scales the colour channels, so a darker colour lowers the light
+ * output on top of it. The one exception is the alarm text in full red - a
+ * warning must not be dimmed along with everything else.
+ *
+ * Measured on 22 Aug at BRI 1, and the reason the greys look oddly bright
+ * next to the reds: a grey pixel lights all three sub-LEDs, a red one only
+ * one, so a saturated colour needs roughly twice the channel value of a grey
+ * to appear equally bright. Heart invisible at red 60, visible at 110; SpO2
+ * invisible at 59, visible at 96; the grey pulse still readable at 76 and
+ * gone at 69. Below that, darker has to come from lighting fewer pixels, not
+ * from a darker colour.
+ */
 struct Palette {
-  uint32_t heart      = 0xC81E3C;
-  uint32_t numbers    = 0x96A0B2;
-  uint32_t sep        = 0x191919;
-  uint32_t heartWait  = 0x3C424E;
-  uint32_t dashes     = 0x3C424E;
-  uint32_t awake      = 0xBE8214;
-  uint32_t lightSleep = 0x286EBE;
-  uint32_t deepSleep  = 0x823CC8;
-  uint32_t sleepUnk   = 0x282828;
-  uint32_t batFrame   = 0x5A6473;
-  uint32_t batOk      = 0x5A6473;
-  uint32_t batCharge  = 0x28AA5A;
-  uint32_t batMid     = 0xAA8214;
-  uint32_t batLow     = 0xB43232;
-  uint32_t alarm      = 0xFF2828;
-  uint32_t info       = 0xE3B341;
-  uint32_t offline    = 0x962828;
+  uint32_t heart      = 0x5E1220;
+  uint32_t numbers    = 0x3E434C;   // pulse and SpO2 share one grey; position
+  uint32_t sep        = 0x1C1C1C;   // tells them apart, heart left, SpO2 right
+  uint32_t heartWait  = 0x3E4650;
+  uint32_t dashes     = 0x4A5260;
+  uint32_t awake      = 0x7E5408;   // amber
+  uint32_t lightSleep = 0x234E80;   // blue
+  uint32_t deepSleep  = 0x5E2A8C;   // purple
+  uint32_t sleepUnk   = 0x242424;
+  uint32_t batFrame   = 0x3A424C;
+  uint32_t batOk      = 0x48505C;
+  uint32_t batCharge  = 0x1F6E3C;
+  uint32_t batMid     = 0x70500E;
+  uint32_t batLow     = 0x7E1E1E;
+  uint32_t batText    = 0x5E6672;   // the percentage, a touch brighter than
+                                    // the vitals numbers - as it was in HA
+  uint32_t alarm      = 0xFF3030;
+  uint32_t info       = 0xE3B341;   // no counterpart in HA, where every alarm
+                                    // was red; owlanzi's own notice colour
+  uint32_t offline    = 0x8E2A2A;
 };
 
 // --- Configuration ---------------------------------------------------------
@@ -65,7 +85,13 @@ struct Config {
   int   hrHighLimit    = 200;
   int   hrHighSeconds  = 15;
 
-  int   briMin         = 1;
+  // 5, not 1: below step 5 the matrix can no longer show a colour honestly.
+  // A grey pixel lights all three of its LEDs, a saturated one only a single
+  // LED, so reds and blues fall away first while greys are still there, and
+  // some pixels stop lighting at all. Lower is still allowed - a night that
+  // has to be truly dark is a fair reason - but it is no longer the default,
+  // and the interface says so.
+  int   briMin         = 5;
   int   briDay         = 60;
   int   briAlarm       = 255;
   int   briTest        = 40;    // so previews stay visible at night too
@@ -75,7 +101,6 @@ struct Config {
   int   volAlarm       = 10;
   bool  soundEnabled   = true;
   int   alarmRepeatSec = 25;    // repeat the tone, 0 = once only
-  bool  serpentine     = true;
   char  lang[3]        = "en";  // "en" or "de"
   int   pollSeconds    = 5;
 

@@ -1,10 +1,14 @@
 /*
  * display.cpp - 8x32 matrix, own 3x5 font, the screens
  *
- * The TC001 wires its pixels in a serpentine: even rows run left to right,
- * odd rows right to left, first pixel top left.
+ * The TC001 wires its pixels in a serpentine: the panel is one long strip
+ * folded row by row, so even rows run left to right and odd rows right to
+ * left, starting top left.
  * Source: github.com/rroels/ulanzi_tc001_hardware
- * Switchable in the web interface in case a board is wired differently.
+ *
+ * This used to be a setting. It is not one any more: this firmware is for
+ * the TC001, where the answer is always yes, and a setting with one correct
+ * value is only something to get wrong.
  */
 #include <FastLED.h>
 #include "display.h"
@@ -38,7 +42,7 @@ static inline CRGB C(uint32_t rgb) { return CRGB((rgb >> 16) & 0xFF, (rgb >> 8) 
 
 static inline uint16_t xy(int x, int y) {
   if (x < 0 || x >= MATRIX_W || y < 0 || y >= MATRIX_H) return NUM_LEDS;
-  if (gCfg.serpentine && (y & 1)) return y * MATRIX_W + (MATRIX_W - 1 - x);
+  if (y & 1) return y * MATRIX_W + (MATRIX_W - 1 - x);
   return y * MATRIX_W + x;
 }
 static inline void px(int x, int y, const CRGB &c) {
@@ -81,7 +85,10 @@ static void screenVitals(const Vitals &v) {
   const Palette &p = gCfg.pal;
   drawHeart(C(p.heart));
   drawNumRight(17, (int)lroundf(v.heart), C(p.numbers));
-  px(18, 3, C(p.sep));
+  // x=19, one to the right of centre: the pulse ends at 17, the oxygen block
+  // starts at 25, and sitting a pixel clear of the number reads better than
+  // hanging off its last column.
+  px(19, 3, C(p.sep));
   drawNumRight(31, (int)lroundf(v.oxygen), C(p.numbers));
   // Sleep bar along the bottom: the deeper the sleep, the shorter and cooler.
   // CAREFUL: the numeric values of "ss" are undocumented. Until they have
@@ -107,7 +114,7 @@ static void screenBattery(int pct, bool charging) {
   CRGB c = charging ? C(p.batCharge)
          : (pct < 20 ? C(p.batLow) : (pct < 40 ? C(p.batMid) : C(p.batOk)));
   fillRect(1, 2, w, 3, c);
-  drawNumRight(28, pct, C(p.numbers));
+  drawNumRight(28, pct, C(p.batText));
   drawText(29, "%", C(p.batFrame));
 }
 
@@ -115,7 +122,7 @@ static void screenWaiting() {
   const Palette &p = gCfg.pal;
   drawHeart(C(p.heartWait));
   drawText(10, "--", C(p.dashes));
-  px(18, 3, C(p.sep));
+  px(19, 3, C(p.sep));
   drawText(25, "--", C(p.dashes));
   fillRect(15, 7, 2, 1, C(p.sleepUnk));
 }
@@ -202,8 +209,25 @@ static void ldrTick() {
   gSt.ambientBright = gBrightAmbient;
 }
 
+// True while a scrolling message is on screen. Defined further down, next to
+// the message state it reads.
+static bool msgShowing();
+
+/*
+ * Setup and the boot messages are exempt from all of the above. Both are
+ * transient, both are meant to be read from across the room, and both are
+ * useless when dim: an IP address you cannot make out is no better than no
+ * IP address, and the hotspot screen exists precisely to be noticed. They
+ * ignore the light sensor and the configured levels and go to full.
+ */
+static const uint8_t BRI_FULL = 255;
+
 static uint8_t targetBrightness() {
+  // Same order as the branches in dispTick(), so the brightness always
+  // belongs to the picture that is actually being drawn.
   if (gSt.testMode) return constrain(gCfg.briTest, 1, 255);
+  if (msgShowing()) return BRI_FULL;
+  if (gSt.apMode)   return BRI_FULL;
   if (anyAlarm())   return constrain(gCfg.briAlarm, 1, 255);
   bool sockActive = gSt.cloudOk && gSt.v.charging == 0 && gSt.v.heart > 0;
   if (sockActive && gBrightAmbient) return constrain(gCfg.briDay, 1, 255);
@@ -226,6 +250,7 @@ void dispBegin() {
 static String   gMsg;
 static uint32_t gMsgUntil = 0;
 static uint32_t gMsgCol   = 0xFFFFFF;
+static bool msgShowing() { return gMsgUntil && millis() < gMsgUntil; }
 void dispMessage(const String &txt, uint32_t seconds, uint32_t rgb) {
   gMsg = txt; gMsgCol = rgb;
   gMsgUntil = millis() + seconds * 1000UL;
