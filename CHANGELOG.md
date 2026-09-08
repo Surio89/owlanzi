@@ -1,4 +1,10 @@
-# Unreleased
+# 1.0.11 — 2026-09-08
+
+- Add Discord community support in English and German, with a desktop sidebar
+  link and a mobile-friendly help card. Users can ask questions, exchange tips
+  and help each other, with the developer participating as well.
+- Link the same community from the website help section, setup guide and every
+  page footer.
 
 - Delay the normal OFFLINE screen until 30 seconds after the last successful
   cloud fetch. Show waiting dashes during short Wi-Fi/cloud interruptions;

@@ -78,6 +78,14 @@ das geprüfte Popup-Template in beide bestehenden Live-Startseiten sowie
 `assets/site.js` und das angepasste Installer-Dialogmodul. Andere Live-Texte und
 die zentrale Betreiber-/Linkkonfiguration bleiben erhalten.
 
+Für die Discord-Ergänzungen beim lesenden Plan und beim Veröffentlichen
+`--with-discord-support` ergänzen. Der Publisher fügt nur den Hilfe-Bereich,
+den Setup-Hinweis und den Footer-Link aus den geprüften lokalen Vorlagen in
+die bestehenden Live-Seiten ein. In `assets/config.js` wird ausschließlich
+das Feld `discord` ergänzt; Betreiberangaben, Shop-Links und Analytics-Einträge
+bleiben erhalten. Abweichende bereits vorhandene Discord-Inhalte brechen die
+Vorbereitung zur Prüfung ab. Der Vorgang ist bei identischen Inhalten wiederholbar.
+
 Der Publisher nutzt `ssh allinkl`, lädt in ein neues Staging-Verzeichnis,
 prüft serverseitig SHA-256 und unveränderte Bestandsdateien, sichert ersetzte
 Dateien und ersetzt USB- und OTA-Manifeste zuletzt atomar. Frühere Binärdateien bleiben.

@@ -10,7 +10,7 @@
 #include <Arduino.h>
 #include <time.h>
 
-#define OWLANZI_VERSION "1.0.10"
+#define OWLANZI_VERSION "1.0.11"
 constexpr uint32_t FETCH_MAX_MS = 20000;
 constexpr uint32_t OFFLINE_AFTER_MS = 30000;
 constexpr uint32_t MEASUREMENT_MAX_SECONDS = 60;

@@ -11,6 +11,13 @@ your own network.
 > it can fail — Wi-Fi drops, the cloud goes down, firmware has bugs. The base
 > station's alarms remain the ones you rely on.
 
+## Help & community
+
+Join the [Owlanzi Discord community](https://discord.gg/Bhpr3zRfVv) for help
+with setup and everyday use. Ask questions, share tips and help other users.
+I’m there as the developer to help too. You can also find the Discord link
+on the website and in the device web interface, in English and German.
+
 ## Support Owlanzi
 
 Owlanzi is free and open source. If you enjoy Owlanzi, you can

@@ -420,6 +420,7 @@ static const char P_B[] PROGMEM = R"HTML(</h1>
   <button id=tab2 role=tab aria-controls=s2 aria-selected=false tabindex=-1 data-t=2><svg class=icon viewBox="0 0 24 24" aria-hidden=true><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg><span data-i18n=tAlarms>Alarms</span></button>
   <button id=tab3 role=tab aria-controls=s3 aria-selected=false tabindex=-1 data-t=3><svg class=icon viewBox="0 0 24 24" aria-hidden=true><path d="M4 7h16M4 17h16"/><circle cx=9 cy=7 r=3 fill="#14171d"/><circle cx=15 cy=17 r=3 fill="#14171d"/></svg><span data-i18n=tSystem>System</span></button>
  </nav>
+ <a class=sidebar-support href="https://discord.gg/Bhpr3zRfVv" target=_blank rel="noopener noreferrer"><span data-i18n=discordSupport>Discord support</span> &nearr;</a>
  <a class=sidebar-support href="https://ko-fi.com/owlanzi" target=_blank rel="noopener noreferrer"><span aria-hidden=true>&#127866;</span> <span data-i18n=supportTitle>Support Owlanzi</span> &nearr;</a>
  <div class=sidebar-foot>
   <div class=device-meta><strong>Owlanzi</strong><span data-i18n=deviceFirmware>Device firmware</span> <span id=deviceVersion>&mdash;</span></div>
@@ -778,6 +779,11 @@ static const char P_D[] PROGMEM = R"HTML(
  <div class=savebar><p class=note data-i18n=saveHint>Save to keep your changes on the clock.</p><div class=save-actions>
  <button class=b onclick=save() data-i18n=saveSystem disabled>Save system</button></div></div>
 </section>
+<aside class=support-card id=discord-support aria-labelledby=discordTitle>
+ <div><h2 id=discordTitle data-i18n=discordHeading>Help &amp; community</h2>
+ <p class=note data-i18n=discordText>Have a question about setup or using Owlanzi? Join us on Discord to ask questions, share tips and help other users. I’m there as the developer to help too.</p></div>
+ <a class=b href="https://discord.gg/Bhpr3zRfVv" target=_blank rel="noopener noreferrer"><span data-i18n=discordJoin>Join us on Discord</span> &nearr;</a>
+</aside>
 <aside class=support-card id=support-owlanzi aria-labelledby=supportTitle>
  <div><h2 id=supportTitle data-i18n=supportHeading>Enjoying Owlanzi?</h2>
  <p class=note data-i18n=supportText>Glad you’re using Owlanzi! If you’d like to make my day, you can buy me a beer or coffee on Ko-fi. It helps support development and puts a big smile on my face for the next evening of coding. &#128522;</p>
@@ -793,6 +799,9 @@ static const char P_JS1[] PROGMEM = R"HTML(<script>
 const $=i=>document.getElementById(i);
 const esc=s=>String(s).replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
 const DE={
+discordSupport:'Discord-Support',discordHeading:'Hilfe &amp; Austausch',
+discordText:'Du hast Fragen zur Einrichtung oder Nutzung von Owlanzi? Auf Discord kannst du Fragen stellen, Tipps austauschen und anderen Nutzern helfen. Ich bin als Entwickler ebenfalls dabei und helfe mit.',
+discordJoin:'Zur Discord-Community',
 supportTitle:'Owlanzi unterstützen',supportHeading:'Gefällt dir Owlanzi?',
 supportText:'Schön, dass du Owlanzi nutzt! Wenn du mir eine kleine Freude machen möchtest, kannst du mir auf Ko-fi ein Bier oder einen Kaffee spendieren. Das unterstützt die Weiterentwicklung und sorgt für ein breites Grinsen beim nächsten Programmierabend. &#128522;',
 supportOptional:'Alles freiwillig. Alle Funktionen bleiben kostenlos.',supportBeer:'Ein Bier spendieren · Ko-fi',
