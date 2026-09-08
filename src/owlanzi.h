@@ -8,6 +8,18 @@
  */
 #pragma once
 #include <Arduino.h>
+#include <time.h>
+
+#define OWLANZI_VERSION "1.0.10"
+constexpr uint32_t FETCH_MAX_MS = 20000;
+constexpr uint32_t OFFLINE_AFTER_MS = 30000;
+constexpr uint32_t MEASUREMENT_MAX_SECONDS = 60;
+inline bool timeReached(uint32_t now, uint32_t deadline) {
+  return (int32_t)(now - deadline) >= 0;
+}
+enum SleepState : uint8_t { SLEEP_UNKNOWN=0, SLEEP_AWAKE=1, SLEEP_LIGHT=8, SLEEP_DEEP=15 };
+SleepState sleepState(int raw);
+const char *sleepName(int raw, bool german);
 
 // --- Ulanzi TC001 hardware -------------------------------------------------
 // Source: https://github.com/rroels/ulanzi_tc001_hardware
@@ -73,6 +85,7 @@ struct Config {
   char  owletMail[65]  = "";
   char  owletPass[65]  = "";
   char  webPass[33]    = "";    // empty = web interface without login
+  char  owletDsn[24]   = "";    // required when more than one device is paired
   bool  europe         = true;
 
   // Own alarms: OFF by default. An oxygen threshold is a medical judgement
@@ -103,6 +116,7 @@ struct Config {
   int   alarmRepeatSec = 25;    // repeat the tone, 0 = once only
   char  lang[3]        = "en";  // "en" or "de"
   int   pollSeconds    = 5;
+  bool  autoUpdateCheck = true; // daily metadata only; installation stays manual
 
   Palette pal;
 };
@@ -112,6 +126,8 @@ bool cfgLoad();
 void cfgSave();
 void cfgFactoryReset();
 bool cfgDevNoSeed();   // after a factory reset, do not seed again
+bool cfgValid(const Config &cfg);
+void cloudInvalidate(); // caller holds StateGuard; rejects in-flight old-account results
 
 // --- Vitals from REAL_TIME_VITALS -----------------------------------------
 struct Vitals {
@@ -129,7 +145,9 @@ struct Vitals {
   bool  lowOx=false, highOx=false, lowHr=false, highHr=false;
   bool  lostPower=false, sockDiscon=false, sockOff=false;
   bool  lowBatt=false;
+  bool  criticalOx=false, criticalBatt=false;
   uint32_t fetchedAt = 0;
+  uint32_t measuredAt = 0; // UTC seconds from REAL_TIME_VITALS.data_updated_at
 };
 
 // Which screen is currently up - exposed to the web interface as well, so
@@ -150,24 +168,27 @@ struct State {
   uint32_t pollCount    = 0;
   char     dsn[24]      = "";
   char     lastError[96]= "";
+  uint32_t authGeneration = 0;
+  bool     appActiveOk = false;
+  char     devices[256] = ""; // paired serials for explicit selection
   Vitals   v;
-  // Freshness gate. When the sock comes off the charger, the Owlet cloud
-  // immediately serves the last reading of the PREVIOUS session - which
-  // looks brand new to us. So what counts is not when we fetched, but when
-  // the value last changed, and whether that was after charging ended.
-  uint32_t vitalsChangedAt = 0;
-  uint32_t chargeEndedAt   = 0;
-  float    lastHr = -1, lastOx = -1;
+  uint32_t sessionAfter = 0; // earliest UTC measurement allowed in this session
+  bool sessionPending = true;
+  uint32_t lastAlarmMeasurement = 0;
 
   bool     alSpo2 = false, alHrLow = false, alHrHigh = false;
   uint32_t spo2Since = 0, hrLowSince = 0, hrHighSince = 0;
   bool     silenced = false;
+  uint32_t alarmMask = 0, acknowledgedMask = 0;
+  bool soundPending = false;
   uint32_t lastAlarmSound = 0;
 
   uint8_t  testMode  = 0;
   uint32_t testUntil = 0;
+  int testSleep = -1;
 
   ScreenId screen     = SCR_OFFLINE;
+  bool     updateNotice = false; // update text currently replacing Battery only
   uint8_t  brightness = 1;
   int      ldrRaw     = 0;
   bool     ambientBright = false;
@@ -182,8 +203,21 @@ extern bool   gAlarmCritical;    // true = sound and full brightness
 void alarmRecompute();
 bool anyAlarm();                 // critical and not acknowledged
 bool vitalsFresh();              // may the values be shown?
+bool cloudFresh();
+bool cloudOffline();            // display grace only; never makes readings fresh
+void alarmsEvaluate(bool newSample);
+void alarmsResetOwn();
+void alarmAcknowledge();
+void stateTick();
 const char *L(const char *en, const char *de);   // language pick
 
 // Vitals are touched from two cores and need a mutex.
 void stateLock();
 void stateUnlock();
+void stateBegin(); // before starting the second task
+struct StateGuard {
+  StateGuard() { stateLock(); }
+  ~StateGuard() { stateUnlock(); }
+  StateGuard(const StateGuard&) = delete;
+  StateGuard& operator=(const StateGuard&) = delete;
+};

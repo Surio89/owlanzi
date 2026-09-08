@@ -12,6 +12,7 @@
  */
 #include <FastLED.h>
 #include "display.h"
+#include "online_update.h"
 
 static CRGB leds[NUM_LEDS];
 static uint8_t gBri = 1;
@@ -95,10 +96,10 @@ static void screenVitals(const Vitals &v) {
   // been checked against the Owlet app, anything unknown deliberately falls
   // back to the grey bar - honestly unknown beats confidently wrong.
   int x = 15, w = 2; CRGB c = C(p.sleepUnk);
-  switch (v.sleepSt) {
-    case 1: case 8:  x = 7;  w = 18; c = C(p.awake);      break;
-    case 2: case 9:  x = 11; w = 10; c = C(p.lightSleep); break;
-    case 3: case 10: x = 14; w = 4;  c = C(p.deepSleep);  break;
+  switch (sleepState(v.sleepSt)) {
+    case SLEEP_AWAKE: x = 7;  w = 18; c = C(p.awake);      break;
+    case SLEEP_LIGHT: x = 11; w = 10; c = C(p.lightSleep); break;
+    case SLEEP_DEEP:  x = 14; w = 4;  c = C(p.deepSleep);  break;
     default: break;
   }
   fillRect(x, 7, w, 1, c);
@@ -170,7 +171,8 @@ static void screenTest(uint8_t mode) {
     }
     case TEST_VITALS: {
       Vitals d; d.heart = 132; d.oxygen = 97;
-      d.sleepSt = ((t / 3000) % 3 == 0) ? 8 : ((t / 3000) % 3 == 1) ? 9 : 10;
+      d.sleepSt = gSt.testSleep>=0 ? gSt.testSleep :
+        ((t / 3000) % 3 == 0) ? SLEEP_AWAKE : ((t / 3000) % 3 == 1) ? SLEEP_LIGHT : SLEEP_DEEP;
       screenVitals(d); break;
     }
     case TEST_BATTERY: screenBattery(64, ((t / 3000) & 1) != 0); break;
@@ -225,11 +227,11 @@ static const uint8_t BRI_FULL = 255;
 static uint8_t targetBrightness() {
   // Same order as the branches in dispTick(), so the brightness always
   // belongs to the picture that is actually being drawn.
+  if (gAlarmCritical) return constrain(gCfg.briAlarm, 1, 255);
   if (gSt.testMode) return constrain(gCfg.briTest, 1, 255);
   if (msgShowing()) return BRI_FULL;
   if (gSt.apMode)   return BRI_FULL;
-  if (anyAlarm())   return constrain(gCfg.briAlarm, 1, 255);
-  bool sockActive = gSt.cloudOk && gSt.v.charging == 0 && gSt.v.heart > 0;
+  bool sockActive = vitalsFresh();
   if (sockActive && gBrightAmbient) return constrain(gCfg.briDay, 1, 255);
   return constrain(gCfg.briMin, 1, 255);
 }
@@ -244,22 +246,49 @@ void dispBegin() {
   clear(); FastLED.show();
 }
 
+static bool    gPrevOn      = false;
+static Palette gPrevPal;
+static int     gPrevBriTest = 0;
+
+void previewBegin() {
+  StateGuard lock;
+  if (gPrevOn) return;
+  gPrevPal = gCfg.pal; gPrevBriTest = gCfg.briTest;
+  gPrevOn = true;
+}
+void previewEnd(bool restore) {
+  StateGuard lock;
+  if (!gPrevOn) return;
+  gPrevOn = false;
+  if (restore) { gCfg.pal = gPrevPal; gCfg.briTest = gPrevBriTest; }
+}
+void previewSavedConfig(Config &config) {
+  StateGuard lock;
+  if(gPrevOn){config.pal=gPrevPal;config.briTest=gPrevBriTest;}
+}
+
 // A message that scrolls for a while and then disappears by itself. At boot
 // the device shows its IP address this way - otherwise you would have to
 // hunt for it in the router just to reach the interface at all.
 static String   gMsg;
 static uint32_t gMsgUntil = 0;
 static uint32_t gMsgCol   = 0xFFFFFF;
-static bool msgShowing() { return gMsgUntil && millis() < gMsgUntil; }
+static bool gMsgActive = false;
+static bool msgShowing() { return gMsgActive && !timeReached(millis(),gMsgUntil); }
 void dispMessage(const String &txt, uint32_t seconds, uint32_t rgb) {
+  StateGuard lock;
   gMsg = txt; gMsgCol = rgb;
-  gMsgUntil = millis() + seconds * 1000UL;
+  gMsgUntil = millis() + constrain(seconds,0u,600u) * 1000UL;
+  gMsgActive=seconds>0;
   gScrollX = MATRIX_W;
 }
 
-void dispTest(uint8_t mode, uint32_t seconds) {
+void dispTest(uint8_t mode, uint32_t seconds, int sleep) {
+  StateGuard lock;
+  if(gAlarmCritical || mode>TEST_INFO)mode=TEST_OFF;
   gSt.testMode = mode;
-  gSt.testUntil = mode ? millis() + seconds * 1000UL : 0;
+  gSt.testSleep=sleep<0?-1:(int)sleepState(sleep);
+  gSt.testUntil = mode ? millis() + constrain(seconds,1u,300u) * 1000UL : 0;
   if (mode) gScrollX = MATRIX_W;
 }
 
@@ -276,20 +305,55 @@ const char *screenName(ScreenId s) {
 }
 
 // --- Main display loop -----------------------------------------------------
+static char gUpdateNoticeVersion[24]="";
+static uint32_t gUpdateNoticeRemaining=0,gUpdateNoticeAt=0;
+static int gUpdateNoticeScrollX=MATRIX_W;
+static uint32_t gUpdateNoticeScrollAt=0;
+void dispUpdateAvailable(const char *version) {
+  StateGuard lock;
+  if(!version || strlen(version)>=sizeof(gUpdateNoticeVersion))return;
+  if(!strcmp(gUpdateNoticeVersion,version))return;
+  strlcpy(gUpdateNoticeVersion,version,sizeof(gUpdateNoticeVersion));
+  gUpdateNoticeRemaining=*version?20000:0;
+  gSt.updateNotice=false;
+}
+static void updateNoticeTick(uint32_t now) {
+  // Charge only time the previous frame actually displayed the notice. This
+  // subtraction also works across millis() rollover, with no sleeping/delays.
+  if(gSt.updateNotice)gUpdateNoticeRemaining-=std::min(gUpdateNoticeRemaining,now-gUpdateNoticeAt);
+  bool wasShowing=gSt.updateNotice;
+  gUpdateNoticeAt=now;
+  gSt.updateNotice=gSt.screen==SCR_BATTERY && !updateBusy() && gUpdateNoticeRemaining>0;
+  if(!gSt.updateNotice)return;
+  if(!wasShowing){gUpdateNoticeScrollX=MATRIX_W;gUpdateNoticeScrollAt=now;}
+  const String text=L("UPDATE AVAILABLE","UPDATE VERFUEGBAR");
+  if(now-gUpdateNoticeScrollAt>=60) {
+    gUpdateNoticeScrollAt=now;
+    if(--gUpdateNoticeScrollX < -textWidth(text))gUpdateNoticeScrollX=MATRIX_W;
+  }
+  clear();drawText(gUpdateNoticeScrollX,text,C(gCfg.pal.info));
+}
 void dispTick() {
   static uint32_t last = 0;
   // 30 frames a second are enough for the scroller and leave Wi-Fi room.
   if (millis() - last < 33) return;
   last = millis();
+  {
+  StateGuard lock;
   ldrTick();
+  if(gAlarmCritical || !gSt.testMode || timeReached(millis(),gSt.testUntil))previewEnd(true);
 
-  if (gSt.testMode && millis() > gSt.testUntil) gSt.testMode = TEST_OFF;
+  if (gSt.testMode && timeReached(millis(),gSt.testUntil)) gSt.testMode = TEST_OFF;
+  if(gMsgActive && timeReached(millis(),gMsgUntil))gMsgActive=false;
   clear();
 
-  if (gSt.testMode) {
+  if(gAlarmCritical) {
+    gSt.testMode=TEST_OFF; gMsgActive=false;
+    gSt.screen=SCR_ALARM; screenAlarm(gAlarmText,true);
+  } else if (gSt.testMode) {
     gSt.screen = SCR_TEST;
     screenTest(gSt.testMode);
-  } else if (gMsgUntil && millis() < gMsgUntil) {
+  } else if (msgShowing()) {
     gSt.screen = SCR_MESSAGE;
     if (millis() - gScrollAt > 60) {
       gScrollAt = millis();
@@ -300,24 +364,21 @@ void dispTick() {
     gSt.screen = SCR_SETUP;
     screenSetup();
   } else {
-    stateLock();
     String  al   = gAlarmText;
     bool    crit = gAlarmCritical;
     Vitals  v    = gSt.v;
-    bool    ok   = gSt.cloudOk;
-    uint32_t age = millis() - gSt.lastOkAt;
-    stateUnlock();
 
-    if (al.length() && !(crit && gSt.silenced)) {
+    if (al.length() && cloudFresh()) {
       gSt.screen = SCR_ALARM;
       screenAlarm(al, crit);
     } else {
       gScrollX = MATRIX_W;
-      // 20 s rather than 90: at a 5 s poll interval, four missed rounds are
-      // enough to stop assuming the connection is alive.
-      bool connected = ok && age < 20000UL;
-      if (!connected) {
+      // Delay the OFFLINE label only. Failed/stale fetches still hide values
+      // and battery status immediately while the network worker retries.
+      if (cloudOffline()) {
         gSt.screen = SCR_OFFLINE; screenOffline();
+      } else if (!cloudFresh()) {
+        gSt.screen = SCR_WAITING; screenWaiting();
       } else if (v.charging != 0 || v.sockOff) {
         gSt.screen = SCR_BATTERY; screenBattery((int)lroundf(v.battery), v.charging != 0);
       } else if (vitalsFresh() && v.heart > 0 && v.oxygen > 0) {
@@ -330,9 +391,11 @@ void dispTick() {
     }
   }
 
+  updateNoticeTick(millis());
   uint8_t t = targetBrightness();
   if (t != gBri) { gBri = t; FastLED.setBrightness(gBri); }
   gSt.brightness = gBri;
+  }
   FastLED.show();
 }
 
@@ -340,6 +403,7 @@ void dispTick() {
 // Fixed buffer, no heap: this is fetched several times a second.
 static char gHex[NUM_LEDS * 6 + 8];
 const char *dispFrameHex() {
+  StateGuard lock;
   static const char *H = "0123456789abcdef";
   char *o = gHex;
   for (int y = 0; y < MATRIX_H; y++)
@@ -385,22 +449,27 @@ void soundBegin() {
   ledcAttachPin(PIN_BUZZER, 0);
   ledcWrite(0, 0);
 }
-void soundStop() { ledcWrite(0, 0); }
+static bool toneActive=false,toneSequence=false,toneManual=false;
+static uint32_t toneUntil=0;
+static uint8_t toneStep=0;
+static void toneStart(uint16_t frequency,uint16_t duration) {
+  ledcWriteTone(0,frequency);
+  ledcWrite(0,frequency ? map(gCfg.volAlarm,0,30,0,512) : 0);
+  toneUntil=millis()+duration; toneActive=true;
+}
+void soundStop() { StateGuard lock;toneActive=false;toneSequence=false;ledcWrite(0, 0); }
 
 void soundBeep(uint16_t freq, uint16_t ms) {
-  if (!gCfg.soundEnabled) return;
-  int duty = map(constrain(gCfg.volAlarm, 0, 30), 0, 30, 0, 512);
-  ledcWriteTone(0, freq);
-  ledcWrite(0, duty);
-  delay(ms);
-  soundStop();
+  StateGuard lock;
+  if (!gCfg.soundEnabled || gAlarmCritical) return;
+  toneSequence=false;toneManual=true;toneStart(freq,ms);
 }
 
-void soundAlarm() {
-  if (!gCfg.soundEnabled) return;
-  // Two tones, so you can hear that the alarm comes from this device and not
-  // from the Owlet base station.
-  for (int i = 0; i < 3; i++) { soundBeep(1568, 90); soundBeep(2093, 90); delay(60); }
+void soundAlarm(bool manual) {
+  StateGuard lock;
+  if (!gCfg.soundEnabled || (manual && gAlarmCritical)) return;
+  toneSequence=true;toneManual=manual;toneStep=0;
+  toneStart(1568,90);
   gSt.lastAlarmSound = millis();
 }
 
@@ -410,7 +479,14 @@ void soundAlarm() {
  * first second and you heard nothing more.
  */
 void soundTick() {
-  if (!gCfg.alarmRepeatSec || !anyAlarm()) return;
-  if (millis() - gSt.lastAlarmSound < (uint32_t)gCfg.alarmRepeatSec * 1000UL) return;
-  soundAlarm();
+  StateGuard lock;
+  if(!gCfg.soundEnabled || (toneActive && !toneManual && !anyAlarm()))soundStop();
+  if(anyAlarm() && gCfg.soundEnabled && (gSt.soundPending ||
+     (!toneActive && gCfg.alarmRepeatSec && millis()-gSt.lastAlarmSound >= (uint32_t)gCfg.alarmRepeatSec*1000))) {
+    gSt.soundPending=false;soundAlarm();
+  }
+  if(!toneActive || !timeReached(millis(),toneUntil))return;
+  if(!toneSequence || ++toneStep>=9){soundStop();return;}
+  int phase=toneStep%3;
+  toneStart(phase==0?1568:phase==1?2093:0,phase==2?60:90);
 }

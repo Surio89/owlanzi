@@ -1,13 +1,16 @@
 {
-  "name": "owlanzi",
-  "version": "1.0.2",
+  "name": "Owlanzi \u2014 Ulanzi TC001 (4 MB)",
+  "version": "1.0.10",
   "new_install_prompt_erase": false,
   "new_install_improv_wait_time": 0,
   "builds": [
     {
       "chipFamily": "ESP32",
       "parts": [
-        { "path": "owlanzi-tc001.bin", "offset": 0 }
+        {
+          "path": "owlanzi-tc001.bin",
+          "offset": 0
+        }
       ]
     }
   ]

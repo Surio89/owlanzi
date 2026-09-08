@@ -16,7 +16,7 @@
  *  it and browse to http://192.168.4.1.
  *
  *  TWO CORES: the network part runs in its own task on core 0, display and
- *  web server on core 1. Both used to sit in loop(), and the display froze
+ *  web server in separate tasks on core 1. Both used to sit in loop(), and the display froze
  *  on every poll - with a 5 second interval and one to two seconds of
  *  network time the scrolling alarm text stuttered visibly. That is exactly
  *  when it has to stay readable.
@@ -25,10 +25,12 @@
 #include <WiFi.h>
 #include <DNSServer.h>
 #include <time.h>
+#include <esp_system.h>
 #include "owlanzi.h"
 #include "display.h"
 #include "owlet.h"
 #include "webui.h"
+#include "online_update.h"
 
 // secrets_local.h is a pure developer convenience: it seeds the NVS once so
 // you don't have to walk through the hotspot on every test. Its string
@@ -44,6 +46,9 @@
 static const char *AP_SSID = "owlanzi";   // open, no password
 static DNSServer gDns;
 static uint32_t gApSince = 0;
+// ESP-IDF specifies task stacks in bytes. HTTPS certificate verification needs
+// headroom beyond the application frames; 1.0.4 used only 10 KB here.
+static constexpr uint32_t NET_TASK_STACK_BYTES=16384;
 
 // --- Wi-Fi -----------------------------------------------------------------
 static void startAp() {
@@ -76,79 +81,62 @@ static bool startSta() {
   return gSt.wifiOk;
 }
 
-// --- Own alarms ------------------------------------------------------------
-/*
- * Duration rather than a count of readings - a steadily bad value is the
- * most dangerous case and must not slip through a counter.
- *
- * Four guards against false alarms: own alarms switched on, sock neither
- * charging nor taken off, reading is not 0 (that is the base station being
- * switched off), and the poll is fresh.
- */
-static void evalOne(bool cond, uint32_t &since, bool &flag, int seconds) {
-  if (!cond) { since = 0; flag = false; return; }
-  uint32_t now = millis();
-  if (!since) since = now;
-  if (!flag && now - since >= (uint32_t)seconds * 1000UL) flag = true;
-}
-
-static void evalAlarms() {
-  const Vitals &v = gSt.v;
-  bool usable = gCfg.ownAlarms && gSt.cloudOk &&
-                (millis() - gSt.lastOkAt < 30000UL) &&
-                v.charging == 0 && !v.sockOff;
-  bool oxOk = usable && v.oxygen > 0;
-  bool hrOk = usable && v.heart  > 0;
-
-  evalOne(oxOk && v.oxygen < gCfg.spo2Limit,   gSt.spo2Since,   gSt.alSpo2,   gCfg.spo2Seconds);
-  evalOne(hrOk && v.heart  < gCfg.hrLowLimit,  gSt.hrLowSince,  gSt.alHrLow,  gCfg.hrLowSeconds);
-  evalOne(hrOk && v.heart  > gCfg.hrHighLimit, gSt.hrHighSince, gSt.alHrHigh, gCfg.hrHighSeconds);
-
-  bool was = gAlarmCritical && !gSt.silenced;
-  alarmRecompute();
-  bool now = gAlarmCritical && !gSt.silenced;
-
-  // Sound on EVERY critical alarm - including the sock's own. Before, only
-  // our own rules made a noise; an oxygen alarm from Owlet, the single most
-  // important message there is, arrived silently.
-  if (now && !was) {
-    Serial.printf("ALARM: %s\n", gAlarmText.c_str());
-    soundAlarm();
-  }
-}
-
 // --- Network task, core 0 --------------------------------------------------
+// Every HTTPS operation takes an immutable configuration snapshot. Only
+// short state transitions hold the mutex; HTTP and display never share a wait.
 static void netTask(void *) {
-  uint32_t lastPoll = 0, retryAt = 0;
-  for (;;) {
-    if (gSt.apMode || !gSt.wifiOk) { vTaskDelay(pdMS_TO_TICKS(500)); continue; }
-    uint32_t now = millis();
-
-    if (!gSt.loggedIn) {
-      if (now < retryAt) { vTaskDelay(pdMS_TO_TICKS(300)); continue; }
-      retryAt = now + 20000;
-      if (owletLogin()) owletFindDevice();
+  uint32_t lastPoll=0,lastRetry=0,lastFind=0,generation=0;
+  bool retryWaiting=false,findWaiting=false;
+  for(;;) {
+    // TLS downloads share this worker with Owlet so memory use stays bounded.
+    if(onlineUpdateTick())continue;
+    if(updateBusy()){vTaskDelay(pdMS_TO_TICKS(100));continue;}
+    uint32_t now=millis();
+    bool connected,ap,logged,haveDsn; int pollSeconds; uint32_t currentGeneration;
+    { StateGuard lock;
+      connected=gSt.wifiOk; ap=gSt.apMode; logged=gSt.loggedIn;
+      haveDsn=strlen(gSt.dsn)>0; pollSeconds=gCfg.pollSeconds;
+      currentGeneration=gSt.authGeneration;
+    }
+    if(currentGeneration!=generation) {
+      generation=currentGeneration;retryWaiting=false;findWaiting=false;
+      lastPoll=now-(uint32_t)pollSeconds*1000;
+    }
+    if(ap || !connected) {vTaskDelay(pdMS_TO_TICKS(200));continue;}
+    if(!logged) {
+      if(retryWaiting && now-lastRetry<20000){vTaskDelay(pdMS_TO_TICKS(100));continue;}
+      {StateGuard lock;alarmsResetOwn();alarmRecompute();}
+      if(owletLogin()) {owletFindDevice();findWaiting=true;lastFind=millis();}
+      lastRetry=millis();retryWaiting=true;
       continue;
     }
-    if (owletTokenSecondsLeft() == 0 && !owletRefresh()) { gSt.loggedIn = false; continue; }
-    if (!strlen(gSt.dsn)) { owletFindDevice(); vTaskDelay(pdMS_TO_TICKS(1000)); continue; }
-
-    if (now - lastPoll < (uint32_t)gCfg.pollSeconds * 1000UL) {
-      vTaskDelay(pdMS_TO_TICKS(100));
+    if(owletTokenSecondsLeft()==0 && !owletRefresh()) {
+      StateGuard lock;
+      if(generation==gSt.authGeneration) {gSt.loggedIn=false;alarmsResetOwn();alarmRecompute();}
       continue;
     }
-    lastPoll = now;
-    gSt.lastTryAt = now;
-
-    if (owletPoll()) {
-      gSt.pollCount++;
-    } else {
-      gSt.failCount++;
-      if (gSt.failCount >= 5) { gSt.loggedIn = false; gSt.failCount = 0; }
-      if (millis() - gSt.lastOkAt > 90000UL) gSt.cloudOk = false;
+    if(!haveDsn) {
+      if(!findWaiting || now-lastFind>=5000) {owletFindDevice();lastFind=millis();findWaiting=true;}
+      vTaskDelay(pdMS_TO_TICKS(100));continue;
     }
-    evalAlarms();
+    if(now-lastPoll<(uint32_t)pollSeconds*1000) {vTaskDelay(pdMS_TO_TICKS(100));continue;}
+    lastPoll=now;
+    {StateGuard lock;gSt.lastTryAt=now;}
+    bool ok=owletPoll();
+    {StateGuard lock;
+      if(generation!=gSt.authGeneration)continue;
+      if(ok)++gSt.pollCount;
+      else {
+        gSt.cloudOk=false;
+        if(++gSt.failCount>=5) {gSt.loggedIn=false;gSt.failCount=0;}
+        alarmsResetOwn();alarmRecompute();
+      }
+    }
   }
+}
+
+static void webTask(void *) {
+  for(;;) { webTick(); vTaskDelay(pdMS_TO_TICKS(5)); }
 }
 
 // --- setup / loop ----------------------------------------------------------
@@ -156,9 +144,11 @@ void setup() {
   Serial.begin(115200);
   delay(200);
   Serial.println("\n\n=== owlanzi ===");
+  Serial.printf("Firmware %s, reset reason %d\n",OWLANZI_VERSION,(int)esp_reset_reason());
   Serial.printf("Chip %s, flash %u MB, heap %u\n", ESP.getChipModel(),
                 (unsigned)(ESP.getFlashChipSize() / 1048576), (unsigned)ESP.getFreeHeap());
 
+  stateBegin();
   bool haveCfg = cfgLoad();
 #ifdef HAVE_SEED
   // Development only: secrets_local.h seeds the NVS once so you don't have
@@ -203,23 +193,41 @@ void setup() {
     dispMessage(String(L("IP ","IP ")) + WiFi.localIP().toString(), 15, gCfg.pal.numbers);
   }
 
-  xTaskCreatePinnedToCore(netTask, "net", 8192, nullptr, 1, nullptr, 0);
+  // TLS certificate/key calculations can run for >5 s without yielding on the
+  // original ESP32. Share priority with IDLE0 so RTOS time slicing can run its
+  // watchdog hook throughout HTTPS. Wi-Fi/TCP tasks still have higher priority.
+  // Do not disable or feed the watchdog on behalf of a starved idle task.
+  if(xTaskCreatePinnedToCore(netTask,"net",NET_TASK_STACK_BYTES,nullptr,tskIDLE_PRIORITY,nullptr,0)!=pdPASS)
+    strlcpy(gSt.lastError,"Cannot start network task",sizeof(gSt.lastError));
+  if(xTaskCreatePinnedToCore(webTask,"web",10240,nullptr,1,nullptr,1)!=pdPASS) {
+    StateGuard lock;
+    strlcpy(gSt.lastError,"Cannot start web task",sizeof(gSt.lastError));
+  }
 }
 
 void loop() {
   if (gSt.apMode) gDns.processNextRequest();
-  webTick();
+  { StateGuard lock;
+    bool wifi=WiFi.status()==WL_CONNECTED;
+    if(gSt.wifiOk && !wifi) {gSt.cloudOk=false;alarmsResetOwn();alarmRecompute();}
+    gSt.wifiOk=wifi;
+  }
+  stateTick();
   dispTick();
   soundTick();
 
   // The middle button acknowledges the alarm tone. Without it you would have
   // to reach for your phone at three in the morning to stop the repeat.
   static uint32_t btnAt = 0;
-  if (digitalRead(PIN_BTN_MID) == LOW && millis() - btnAt > 600) {
+  static bool wasDown=false;
+  bool down=digitalRead(PIN_BTN_MID)==LOW;
+  if (down && !wasDown && millis() - btnAt > 60) {
     btnAt = millis();
-    if (anyAlarm()) { gSt.silenced = true; soundStop(); Serial.println("alarm acknowledged"); }
+    if (anyAlarm()) { alarmAcknowledge(); soundStop(); Serial.println("alarm acknowledged"); }
     else dispTest(TEST_VITALS, 8);
   }
+
+  wasDown=down;
 
   /*
    * The hotspot is not a permanent state. If a Wi-Fi is stored and the
@@ -228,8 +236,11 @@ void loop() {
    * retry after three minutes. Before, it stayed there until somebody pulled
    * the plug.
    */
-  if (gSt.apMode && strlen(gCfg.wifiSsid) && millis() - gApSince > 180000UL) {
+  bool retryWifi;
+  {StateGuard lock;retryWifi=gSt.apMode && strlen(gCfg.wifiSsid) && millis()-gApSince>180000UL;}
+  if (retryWifi) {
     Serial.println("hotspot up for 3 min - retrying Wi-Fi");
     ESP.restart();
   }
+  delay(1);
 }

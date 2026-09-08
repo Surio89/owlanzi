@@ -3,6 +3,11 @@
  */
 #pragma once
 #include "owlanzi.h"
+// Temporary colours are owned by the display, so alarm preemption/expiry
+// restores saved settings even while a web upload is still in progress.
+void previewBegin();
+void previewEnd(bool restore);
+void previewSavedConfig(Config &config);
 
 void dispBegin();
 void dispTick();                 // call from loop()
@@ -21,9 +26,12 @@ enum TestMode : uint8_t {
   TEST_ALARM,
   TEST_INFO
 };
-void dispTest(uint8_t mode, uint32_t seconds);
+void dispTest(uint8_t mode, uint32_t seconds, int sleep=-1);
 // Scrolling text for a fixed duration, e.g. the IP address after boot
 void dispMessage(const String &txt, uint32_t seconds, uint32_t rgb);
+// Arm once per discovered version. Empty clears it. Shown for 20 seconds of
+// Battery-screen time, yielding immediately to every other screen.
+void dispUpdateAvailable(const char *version);
 
 // Current frame as a hex string for the live mirror in the browser:
 // 256 pixels * 3 bytes. Writes into a fixed buffer, no heap.
@@ -39,6 +47,6 @@ const char *screenName(ScreenId s);
 // Sound
 void soundBegin();
 void soundBeep(uint16_t freq, uint16_t ms);
-void soundAlarm();
+void soundAlarm(bool manual=false);
 void soundStop();
 void soundTick();                // repeats the alarm tone
