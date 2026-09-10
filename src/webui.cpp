@@ -747,7 +747,7 @@ static const char P_D[] PROGMEM = R"HTML(
   <div class=row><span data-i18n=installedVersion>Installed version</span><span id=updateCurrent>-</span></div>
   <div class=row><span data-i18n=latestVersion>Latest version</span><span id=updateLatest>-</span></div>
   <div class=chk><input type=checkbox id=autoUpdateCheck><label style=margin:0 data-i18n=lAutoUpdate>Check for updates daily</label></div>
-  <p class=note data-i18n=dailyUpdateNote>Checks for new firmware once a day, without installing it. The request also contributes to an approximate daily device count, without a device ID. Disable and save to stop automatic checks.</p>
+  <p class=note data-i18n=dailyUpdateNote>Checks for new firmware once a day, without installing it. The request includes the model and installed firmware version for approximate daily counts, without a device ID. Disable and save to stop automatic checks.</p>
   <button class="b g" id=updateCheck onclick="onlineUpdate(false)" data-i18n=checkUpdate>Check for updates</button>
   <button class=b id=updateInstall onclick="onlineUpdate(true)" data-i18n=installUpdate>Install latest update</button>
   <p id=updateStatus class=note role=status aria-live=polite></p>
@@ -865,7 +865,7 @@ accessNote:'Ohne Passwort kann jeder im Netz die Alarme abschalten. Für ein Ger
 hUpdate:'Firmware aktualisieren',
 updateBannerNote:'Deine Einstellungen bleiben erhalten. Messwerte pausieren während der Installation; die Uhr am Strom lassen.',
 lAutoUpdate:'Täglich nach Updates suchen',
-dailyUpdateNote:'Prüft einmal täglich auf neue Firmware, ohne sie zu installieren. Der Abruf dient auch als Näherung für die tägliche Geräteanzahl, ohne Geräte-ID. Zum Abschalten deaktivieren und speichern.',
+dailyUpdateNote:'Prüft einmal täglich auf neue Firmware, ohne sie zu installieren. Der Abruf übermittelt Modell und installierte Firmware-Version für ungefähre Tageszahlen, ohne Geräte-ID. Zum Abschalten deaktivieren und speichern.',
 onlineNote:'Installiert die neueste Version direkt von owlanzi.com. Gespeicherte WLAN-Daten, Owlet-Konto, Farben und Alarmeinstellungen bleiben erhalten. Neue Messwerte pausieren kurz während der Installation. Die Uhr am Strom lassen.',
 installedVersion:'Installierte Version',latestVersion:'Neueste Version',checkUpdate:'Auf Updates prüfen',installUpdate:'Neuestes Update installieren',manualUpdate:'Firmware-Datei manuell installieren',
 updNote:'Eine Owlanzi-OTA-Anwendungsdatei (-ota.bin) auswählen, nicht das kombinierte USB-Installer-Abbild. Gespeicherte Einstellungen bleiben erhalten; danach startet die Uhr neu.',

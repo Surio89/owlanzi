@@ -194,7 +194,7 @@ static bool readExact(WiFiClient &stream,uint8_t *dest,size_t size,uint32_t star
 static bool __attribute__((noinline)) fetchRelease(OnlineRelease &release,bool daily) {
   WiFiClientSecure client;HTTPClient http;
   String url=String(ORIGIN)+"ota-"+updateTarget()+".json";
-  if(daily)url+="?daily-update-check=1";
+  if(daily)url+=String("?daily-update-check=1&model=")+updateTarget()+"&version="+OWLANZI_VERSION;
   int code=openDownload(http,client,url);int size=http.getSize();
   bool ok=false;
   if(code!=200)status("error","network");

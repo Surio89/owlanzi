@@ -1,3 +1,9 @@
+# 1.0.12 — 2026-09-10
+
+- Include hardware model and installed firmware version with the existing daily
+  update check for aggregate statistics. No device identifiers; daily scheduling
+  and opt-out remain unchanged.
+
 # 1.0.11 — 2026-09-08
 
 - Add Discord community support in English and German, with a desktop sidebar

@@ -58,7 +58,7 @@ void testUpdateNotices(){
 void testOnlineUpdates(){
   testUpdateNotices();
   reset();
-  const std::string dailyUrl=std::string("https://owlanzi.com/firmware/ota-")+updateTarget()+".json?daily-update-check=1";
+  const std::string dailyUrl=std::string("https://owlanzi.com/firmware/ota-")+updateTarget()+".json?daily-update-check=1&model="+updateTarget()+"&version="+OWLANZI_VERSION;
   replies.push_back({200,onlineManifest()});
   check("daily scheduler performs a real check without installing",onlineUpdateTick()&&requestedUrls.size()==1&&requestedUrls[0]==dailyUrl&&!Update.begins&&!ESP.restarts&&std::string(phase)=="available");
   check("same-day idle tick performs no request",!onlineUpdateTick()&&requestedUrls.size()==1);
